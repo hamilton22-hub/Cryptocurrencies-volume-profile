@@ -1,0 +1,100 @@
+{
+  "rescue_candidate": {
+    "name": "LOW_ENERGY_ADVERSE_PROBE",
+    "policy": "q0.65_E1.25_T0.50_H48",
+    "volume_threshold": 1.1392006524493663,
+    "flow_threshold": -0.043357461779017004,
+    "decision_events": 14,
+    "original_stop_hits": 9,
+    "reconciled_stop_hits": 4,
+    "unreconciled_stop_hits": 5,
+    "outcomes": {
+      "target": 5,
+      "no_stop_divergence": 5,
+      "emergency": 3,
+      "activation_bar_ambiguous": 1
+    },
+    "gross_delta_full_reconciled_subset": 2.28,
+    "gross_delta_risknorm": 1.3390483329035705,
+    "delta_by_year": {
+      "2021": 0.0,
+      "2022": -0.62,
+      "2023": 1.45,
+      "2024": 0.0,
+      "2025": 1.45,
+      "2026": 0.0
+    },
+    "net_delta_by_cost_per_changed_trade": {
+      "0.02": 2.1999999999999997,
+      "0.05": 2.0799999999999996,
+      "0.1": 1.88,
+      "0.2": 1.4799999999999998
+    },
+    "modified_ledger_entry_order_approx": {
+      "n": 1178,
+      "wins": 454,
+      "losses": 721,
+      "zeros": 3,
+      "wr": 38.539898132427844,
+      "sum_r": 1335.3400000000001,
+      "expectancy": 1.1335653650254671,
+      "median": -0.28,
+      "avg_win": 3.995154185022026,
+      "avg_loss": -0.6636061026352288,
+      "payoff": 6.0203698687474,
+      "pf": 3.7909125109727038,
+      "max_dd": -14.680000000000518,
+      "max_loss_streak": 11,
+      "best": 96.52,
+      "worst": -2.33,
+      "tail_gt5": 83,
+      "tail_r_gt5": 1281.0799999999997
+    },
+    "unadjusted_monthly_block_p": 0.24917508249175083,
+    "r_reconciliation_tolerance": 0.1
+  },
+  "rescue_within_policy_rule_search": {
+    "scope": "feature rules within fixed q0.65/E1.25/T0.50 policy",
+    "conditions": 0,
+    "unique_discovery_positive_rules": 0,
+    "candidate_oos_delta": 2.9,
+    "candidate_oos_decisions": 6,
+    "family_p": null,
+    "unadjusted_p": null,
+    "reason": "No rule had positive paired delta in the discovery sample."
+  },
+  "early_exit_multiple_testing": {
+    "family_p": 0.7641235876412359,
+    "iterations": 10000,
+    "unadjusted_p": 0.0714928507149285,
+    "rules": 64,
+    "best_rule": "2|0.25|0.5|True",
+    "best_delta": 5.334700502928821,
+    "best_delta_by_year": {
+      "2023": 1.036649,
+      "2024": -1.506148,
+      "2025": 2.489176,
+      "2026": 3.315023
+    }
+  },
+  "giveback_validation": {
+    "family_p": 0.5293470652934706,
+    "iterations": 10000,
+    "unadjusted_p": 0.42705729427057293,
+    "eligible_discovery_positive_rules": 3,
+    "chosen_threshold_r": 0.5,
+    "discovery_delta": 4.884823014436305,
+    "oos_delta": 2.316120531070553,
+    "full_sample_actions": 56,
+    "full_sample_delta": 7.20094354550686,
+    "full_sample_tail_actions": 1,
+    "delta_by_year": {
+      "2021": 3.701942,
+      "2022": 1.182881,
+      "2023": -2.880652,
+      "2024": 4.944496,
+      "2025": 2.321819,
+      "2026": -2.069542
+    }
+  }
+}

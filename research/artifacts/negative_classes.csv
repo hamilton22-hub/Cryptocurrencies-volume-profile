@@ -1,0 +1,7 @@
+neg_class,n,total_r,mean_r
+wick_breach_stop,154,-130.1,-0.8448051948051948
+close_through_stop,144,-125.36,-0.8705555555555555
+partial_or_structure_exit,226,-102.98,-0.4556637168141593
+reached_1r_then_neg_exit,138,-55.11,-0.3993478260869565
+reached_1r_then_full_stop,37,-38.65,-1.0445945945945945
+full_stop_no_path_touch,24,-27.54,-1.1475
