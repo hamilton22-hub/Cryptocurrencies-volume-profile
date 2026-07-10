@@ -49,7 +49,7 @@ def load_metrics(path: Path | None = None) -> pd.DataFrame | None:
         "count_long_short_ratio": "global_ls",
         "sum_taker_long_short_vol_ratio": "taker_ls",
     }
-    df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
+    df = df.rename(columns=rename)
     if "create_time" not in df.columns:
         return df
     df["create_time"] = pd.to_datetime(df["create_time"], utc=True, errors="coerce")
@@ -187,18 +187,16 @@ def attach_path_features(trades: pd.DataFrame, klines: pd.DataFrame) -> pd.DataF
             h4 = slice(i0, min(i0 + 16, len(closes)))
             if sign > 0:
                 feat["move_4h"] = (closes[min(i0 + 15, len(closes) - 1)] - entry) / entry
-                feat["max_bar_4h"] = np.nanmax((highs[h4] - lows[h4]) / closes[h4])
             else:
                 feat["move_4h"] = (entry - closes[min(i0 + 15, len(closes) - 1)]) / entry
-                feat["max_bar_4h"] = np.nanmax((highs[h4] - lows[h4]) / closes[h4])
+            feat["max_bar_4h"] = np.nanmax((highs[h4] - lows[h4]) / closes[h4])
             tb = np.nansum(tbuy[h4])
             vv = np.nansum(vol[h4])
             feat["taker_imb_4h_after"] = sign * (2 * tb / vv - 1) if vv > 0 else np.nan
             # entry touch confirmation
-            if sign > 0:
-                touched_entry = np.any((lows[path_slice] <= entry) & (highs[path_slice] >= entry))
-            else:
-                touched_entry = np.any((lows[path_slice] <= entry) & (highs[path_slice] >= entry))
+            touched_entry = np.any(
+                (lows[path_slice] <= entry) & (highs[path_slice] >= entry)
+            )
             # also check if entry inside first candle
             feat["entry_in_first_bar"] = bool(lows[i0] <= entry <= highs[i0])
             feat["entry_touched_before_exit"] = bool(touched_entry)
@@ -248,8 +246,8 @@ def attach_oi_features(trades: pd.DataFrame, metrics: pd.DataFrame) -> pd.DataFr
         oi_vals = m["oi"].to_numpy()
         d_oi = []
         for _, t in merged.iterrows():
-            i0 = oi_times.searchsorted(t["entry_time"], side="right") - 1
-            if i0 < 0 or not t.get("oi_available", False):
+            i0 = _asof_idx(oi_times, t["entry_time"])
+            if i0 is None or not t.get("oi_available", False):
                 d_oi.append(np.nan)
                 continue
             i1 = min(i0 + 48, len(oi_vals) - 1)  # 5m*48=4h
@@ -272,11 +270,16 @@ def node_exhaustion_mask(trades: pd.DataFrame, lookback_hours: float = 72.0, n_f
     for idx in order:
         row = trades.loc[idx]
         cutoff = row["entry_time"] - pd.Timedelta(hours=lookback_hours)
-        hist = [h for h in hist if h["entry_time"] >= cutoff]
+        hist = [
+            h
+            for h in hist
+            if h["entry_time"] >= cutoff
+        ]
         same = [
             h
             for h in hist
             if h["direction"] == row["direction"]
+            and h["exit_time"] <= row["entry_time"]
             and abs(h["entry_price"] - row["entry_price"]) <= float(row["sl_usd"])
             and h["r"] < 0
         ]
@@ -284,10 +287,11 @@ def node_exhaustion_mask(trades: pd.DataFrame, lookback_hours: float = 72.0, n_f
             block.loc[idx] = True
         gf_blocked = bool(row["gf_blocked"]) if "gf_blocked" in trades.columns and pd.notna(row.get("gf_blocked")) else False
         in_metrics = bool(row["in_metrics"]) if "in_metrics" in trades.columns else True
-        if in_metrics and not gf_blocked:
+        if in_metrics and not gf_blocked and not block.loc[idx]:
             hist.append(
                 {
                     "entry_time": row["entry_time"],
+                    "exit_time": row["exit_time_parsed"],
                     "direction": row["direction"],
                     "entry_price": float(row["entry_price"]),
                     "r": float(row["r"]),

@@ -35,9 +35,6 @@ from features import (  # noqa: E402
 from load_trades import load_gf_off, load_gf_on, metrics_subset, summarize_r  # noqa: E402
 
 ART = ROOT / "artifacts"
-REP = ROOT / "reports"
-ART.mkdir(parents=True, exist_ok=True)
-REP.mkdir(parents=True, exist_ok=True)
 
 
 def classify_negatives(df: pd.DataFrame) -> pd.DataFrame:
@@ -48,8 +45,23 @@ def classify_negatives(df: pd.DataFrame) -> pd.DataFrame:
     # full stop-ish
     full_stop = neg & (r <= -0.95)
     # path-based
-    close_stop = neg & out.get("stop_close_through", False)
-    wick_stop = neg & out.get("stop_wick_only", False)
+    close_through = (
+        out["stop_close_through"].fillna(False).astype(bool)
+        if "stop_close_through" in out
+        else pd.Series(False, index=out.index)
+    )
+    wick_only = (
+        out["stop_wick_only"].fillna(False).astype(bool)
+        if "stop_wick_only" in out
+        else pd.Series(False, index=out.index)
+    )
+    stop_touched = (
+        out["stop_touched"].fillna(False).astype(bool)
+        if "stop_touched" in out
+        else pd.Series(False, index=out.index)
+    )
+    close_stop = neg & close_through
+    wick_stop = neg & wick_only
     reached_1r = out.get("mfe_r", 0) >= 1.0
     out.loc[neg & close_stop, "neg_class"] = "close_through_stop"
     out.loc[neg & wick_stop & ~close_stop, "neg_class"] = "wick_breach_stop"
@@ -59,7 +71,7 @@ def classify_negatives(df: pd.DataFrame) -> pd.DataFrame:
     mask = neg & (out["neg_class"] == "non_negative")
     out.loc[mask, "neg_class"] = "partial_or_structure_exit"
     # override priority for full stop without path info
-    out.loc[full_stop & ~out.get("stop_touched", False).fillna(False), "neg_class"] = "full_stop_no_path_touch"
+    out.loc[full_stop & ~stop_touched, "neg_class"] = "full_stop_no_path_touch"
     return out
 
 
@@ -83,12 +95,18 @@ def filter_impact(base: pd.DataFrame, mask_remove: pd.Series, label: str) -> dic
         "delta_wr": sk["wr"] - sb["wr"],
         "base_pf": sb["pf"],
         "keep_pf": sk["pf"],
-        "delta_pf": (sk["pf"] - sb["pf"]) if sk["pf"] == sk["pf"] and sb["pf"] == sb["pf"] else np.nan,
+        "delta_pf": (
+            sk["pf"] - sb["pf"]
+            if pd.notna(sk["pf"]) and pd.notna(sb["pf"])
+            else np.nan
+        ),
         "base_mdd": sb["max_dd"],
         "keep_mdd": sk["max_dd"],
         "delta_mdd": sk["max_dd"] - sb["max_dd"],
         "improves_total_r": sk["sum_r"] >= sb["sum_r"] - 1e-9,
-        "improves_pf": (sk["pf"] >= sb["pf"] - 1e-9) if sk["pf"] == sk["pf"] else False,
+        "improves_pf": (
+            sk["pf"] >= sb["pf"] - 1e-9 if pd.notna(sk["pf"]) else False
+        ),
         "no_tail_loss": sr["tail_gt5"] == 0,
     }
 
@@ -111,6 +129,17 @@ def yearly_removed(base: pd.DataFrame, mask_remove: pd.Series) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _prior_quantile(
+    values: pd.Series, quantile: float, min_history: int
+) -> pd.Series:
+    """Expanding quantile using only observations before the current row."""
+    return (
+        values.expanding(min_periods=min_history)
+        .quantile(quantile)
+        .shift(1)
+    )
+
+
 def walk_forward_quantile_filter(
     df: pd.DataFrame,
     feature: str,
@@ -122,17 +151,11 @@ def walk_forward_quantile_filter(
     d = df.dropna(subset=[feature]).sort_values("entry_time").copy()
     oos = d["entry_time"] >= pd.Timestamp(oos_start, tz="UTC")
     remove = pd.Series(False, index=d.index)
-    hist_vals = []
-    for idx, row in d.iterrows():
-        if len(hist_vals) >= 50:
-            thr = np.nanquantile(hist_vals, q)
-            if side == "low" and row[feature] <= thr:
-                if oos.loc[idx]:
-                    remove.loc[idx] = True
-            if side == "high" and row[feature] >= thr:
-                if oos.loc[idx]:
-                    remove.loc[idx] = True
-        hist_vals.append(row[feature])
+    threshold = _prior_quantile(d[feature], q, 50)
+    if side == "low":
+        remove = oos & (d[feature] <= threshold)
+    elif side == "high":
+        remove = oos & (d[feature] >= threshold)
     base_oos = d.loc[oos]
     rem_oos = remove.loc[oos]
     # align
@@ -143,16 +166,13 @@ def simple_intersection_filter(df: pd.DataFrame, oos_start: str = "2023-01-01") 
     """Least-bad compromise from prior research: tight stop/ATR + weak 1h momentum."""
     d = df.dropna(subset=["stop_atr", "mom_1h"]).sort_values("entry_time").copy()
     oos = d["entry_time"] >= pd.Timestamp(oos_start, tz="UTC")
-    remove = pd.Series(False, index=d.index)
-    hist_stop, hist_mom = [], []
-    for idx, row in d.iterrows():
-        if len(hist_stop) >= 50:
-            thr_stop = np.nanquantile(hist_stop, 0.10)
-            thr_mom = np.nanquantile(hist_mom, 0.25)
-            if row["stop_atr"] <= thr_stop and row["mom_1h"] <= thr_mom and oos.loc[idx]:
-                remove.loc[idx] = True
-        hist_stop.append(row["stop_atr"])
-        hist_mom.append(row["mom_1h"])
+    stop_threshold = _prior_quantile(d["stop_atr"], 0.10, 50)
+    momentum_threshold = _prior_quantile(d["mom_1h"], 0.25, 50)
+    remove = (
+        oos
+        & (d["stop_atr"] <= stop_threshold)
+        & (d["mom_1h"] <= momentum_threshold)
+    )
     base_oos = d.loc[oos]
     return filter_impact(base_oos, remove.loc[oos].reindex(base_oos.index).fillna(False), "WF stop_atr low10 ∩ mom_1h low25")
 
@@ -266,19 +286,12 @@ def search_new_candidates(df: pd.DataFrame, oos_start: str = "2023-01-01") -> pd
         if feat not in d.columns:
             continue
         for q in qs:
-            # build expanding mask on full d, evaluate on oos
+            threshold = _prior_quantile(d[feat], q, 80)
             remove = pd.Series(False, index=d.index)
-            hist = []
-            for idx, row in d.iterrows():
-                val = row[feat]
-                if len(hist) >= 80 and val == val:
-                    thr = np.nanquantile(hist, q if side == "low" else q)
-                    if side == "low" and val <= thr and oos.loc[idx]:
-                        remove.loc[idx] = True
-                    if side == "high" and val >= thr and oos.loc[idx]:
-                        remove.loc[idx] = True
-                if val == val:
-                    hist.append(val)
+            if side == "low":
+                remove = oos & (d[feat] <= threshold)
+            elif side == "high":
+                remove = oos & (d[feat] >= threshold)
             impact = filter_impact(base, remove.loc[oos].reindex(base.index).fillna(False), f"{feat}|{side}|q{q}")
             impact["family"] = "quantile"
             candidates.append(impact)
@@ -293,16 +306,13 @@ def search_new_candidates(df: pd.DataFrame, oos_start: str = "2023-01-01") -> pd
 
     # very weak directed taker + tight stop intersection
     if {"stop_atr", "taker_imb_1h"}.issubset(d.columns):
-        remove = pd.Series(False, index=d.index)
-        hs, ht = [], []
-        for idx, row in d.iterrows():
-            if len(hs) >= 80 and row["stop_atr"] == row["stop_atr"] and row["taker_imb_1h"] == row["taker_imb_1h"]:
-                if row["stop_atr"] <= np.nanquantile(hs, 0.15) and row["taker_imb_1h"] <= np.nanquantile(ht, 0.25) and oos.loc[idx]:
-                    remove.loc[idx] = True
-            if row["stop_atr"] == row["stop_atr"]:
-                hs.append(row["stop_atr"])
-            if row["taker_imb_1h"] == row["taker_imb_1h"]:
-                ht.append(row["taker_imb_1h"])
+        stop_threshold = _prior_quantile(d["stop_atr"], 0.15, 80)
+        taker_threshold = _prior_quantile(d["taker_imb_1h"], 0.25, 80)
+        remove = (
+            oos
+            & (d["stop_atr"] <= stop_threshold)
+            & (d["taker_imb_1h"] <= taker_threshold)
+        )
         impact = filter_impact(base, remove.loc[oos].reindex(base.index).fillna(False), "stop_atr low15 ∩ taker_imb low25")
         impact["family"] = "intersection"
         candidates.append(impact)
@@ -365,32 +375,11 @@ def permutation_p(base_r: np.ndarray, removed_idx: np.ndarray, n_perm: int = 200
         idx = rng.choice(n, size=k, replace=False)
         if base_r[idx].sum() <= obs:
             count += 1
-    return count / n_perm
-
-
-def time_stop_experiment(df: pd.DataFrame) -> dict:
-    """If after 1h: r_path < -0.25, MFE < 1, taker against -> force close at 1h mark."""
-    # approximate using move_4h/4 as proxy is weak; use path features if bars available via mfe/mae only
-    # We approximate 1h state with directed move over first 4 bars stored? Not stored.
-    # Use available: if mae_r <= -0.25 and mfe_r < 1 and eventual r
-    d = df.dropna(subset=["mae_r", "mfe_r"]).copy()
-    bad = (d["mae_r"] <= -0.25) & (d["mfe_r"] < 1.0)
-    # canonical result of group
-    group = d.loc[bad]
-    # hypothetical: close at -0.25R instead of final r when final would be whatever
-    hyp = d["r"].copy()
-    hyp.loc[bad] = -0.25
-    return {
-        "group_n": int(bad.sum()),
-        "group_wr": float((group["r"] > 0).mean() * 100) if len(group) else np.nan,
-        "group_sum_r": float(group["r"].sum()) if len(group) else 0.0,
-        "canonical_sum": float(d["r"].sum()),
-        "hyp_sum": float(hyp.sum()),
-        "delta": float(hyp.sum() - d["r"].sum()),
-    }
+    return (count + 1) / (n_perm + 1)
 
 
 def main():
+    ART.mkdir(parents=True, exist_ok=True)
     print("Loading trades...")
     on_all = load_gf_on()
     off_all = load_gf_off()
@@ -491,8 +480,6 @@ def main():
     good = cand_df.loc[cand_df["improves_total_r"] & cand_df["no_tail_loss"]].copy()
     good.to_csv(ART / "promising_candidates.csv", index=False)
 
-    ts = time_stop_experiment(feat)
-
     # GF rule marginals from off file
     rules = []
     if "gf_rules" in off.columns:
@@ -537,7 +524,6 @@ def main():
     report = {
         "summary": summary,
         "stop_stats": stop_stats,
-        "time_stop": ts,
         "node_exhaustion_perm_p": p_exh,
         "oi_summary": oi_summary,
         "n_candidates": int(len(cand_df)),
@@ -567,8 +553,11 @@ def main():
     lines.append("\n## Shadow-правила\n")
     lines.append(shadow_df.to_markdown(index=False))
     lines.append(f"\nPermutation p (NODE_EXHAUSTION removed sum ≤ obs): {p_exh:.4f}\n")
-    lines.append("\n## Time-stop эксперимент\n")
-    lines.append(json.dumps(ts, indent=2))
+    lines.append("\n## Time-stop / early-exit\n")
+    lines.append(
+        "Причинный replay вынесен в `causal_policy_research.md`; "
+        "full-path MFE/MAE не используется как состояние через час."
+    )
     lines.append("\n## OI механизм хвоста\n")
     lines.append(json.dumps(oi_summary, indent=2))
     lines.append("\n## Кандидаты с улучшением Total R и без потери хвоста >5R (OOS)\n")
@@ -582,8 +571,9 @@ def main():
         lines.append(ml_df[cols].head(20).to_markdown(index=False))
     lines.append("\n## Вердикт\n")
     lines.append("См. итоговый вывод в конце пайплайна и `research_summary.json`.")
-    (REP / "negative_trade_filter_research.md").write_text("\n".join(lines))
-    print("Wrote report", REP / "negative_trade_filter_research.md")
+    generated_report = ART / "negative_trade_filter_research_generated.md"
+    generated_report.write_text("\n".join(lines))
+    print("Wrote report", generated_report)
 
 
 if __name__ == "__main__":

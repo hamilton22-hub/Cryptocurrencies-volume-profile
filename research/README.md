@@ -14,6 +14,14 @@ pip install -r research/requirements.txt
 python research/scripts/download_binance.py
 python research/scripts/analyze_filters.py
 python research/scripts/validate_oi_holdout.py
+python research/scripts/analyze_causal_policies.py
+python research/scripts/validate_causal_candidates.py
 ```
 
-Отчёт: `reports/negative_trade_filter_research.md`
+Отчёты:
+
+- `reports/negative_trade_filter_research.md`
+- `reports/causal_policy_research.md`
+
+`analyze_stop_structures.py` и старый stop-hunt отчёт оставлены только как
+deprecated-маркер: их hindsight labels и MFE-counterfactual не причинны.

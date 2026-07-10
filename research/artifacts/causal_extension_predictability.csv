@@ -1,0 +1,7 @@
+timeframe,checkpoint,decision_n,economic_n,train_n,test_n,beneficial_n,delta_always_full,oracle_positive_delta,auc_logistic,auc_gradient_boosting
+15M,0.65,50,29,10,19,2,0.4399999999999997,2.9,,
+15M,0.75,27,18,7,11,1,-0.72,1.45,,
+15M,0.85,5,3,2,1,0,-0.28,0.0,,
+1H,0.65,43,37,11,26,3,-1.0500000000000003,4.359999999999999,,
+1H,0.75,18,16,5,11,0,-2.7800000000000002,0.0,,
+1H,0.85,4,4,2,2,0,-0.75,0.0,,

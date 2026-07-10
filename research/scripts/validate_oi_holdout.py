@@ -10,6 +10,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    return value
+
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -18,10 +30,10 @@ from load_trades import load_gf_on, metrics_subset, summarize_r  # noqa: E402
 from analyze_filters import filter_impact, permutation_p, yearly_removed  # noqa: E402
 
 ART = ROOT / "artifacts"
-ART.mkdir(parents=True, exist_ok=True)
 
 
 def main():
+    ART.mkdir(parents=True, exist_ok=True)
     on = metrics_subset(load_gf_on())
     metrics = load_metrics()
     feat = attach_oi_features(on, metrics)
@@ -91,10 +103,16 @@ def main():
 
     df = pd.DataFrame(results)
     # flatten for csv
-    flat = df.drop(columns=[c for c in ["year_breakdown"] if c in df.columns])
+    flat = df.drop(columns=["year_breakdown"], errors="ignore")
     flat.to_csv(ART / "oi_holdout_validation.csv", index=False)
     with open(ART / "oi_holdout_validation.json", "w") as fh:
-        json.dump(results, fh, indent=2, default=str)
+        json.dump(
+            _json_safe(results),
+            fh,
+            indent=2,
+            default=str,
+            allow_nan=False,
+        )
 
     # Print key lines
     keys = [

@@ -1,9 +1,9 @@
 # Large market downloads — regenerate via research/scripts/download_binance.py
-research/data/klines/
-research/data/funding/
-research/data/metrics/
-research/artifacts/*.parquet
-research/artifacts/*.log
+data/klines/
+data/funding/
+data/metrics/
+artifacts/*.parquet
+artifacts/*.log
 __pycache__/
 *.pyc
 .pytest_cache/

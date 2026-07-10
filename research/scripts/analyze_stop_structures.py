@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""
-Decompose stopped trades into logical structures:
+"""DEPRECATED diagnostic script.
+
+Do not use its ``stop_hunt`` labels or counterfactual results for decisions.
+Use ``analyze_causal_policies.py`` instead.
+
+Historical intent:
+- Decompose stopped trades into logical structures:
 - entry style: market-like vs limit/retest
 - timeframe: 1H vs 15M
 - stop fate: stop-hunt (counterfactual 12h MFE without retest) vs hopeless deep invalidation
@@ -472,4 +477,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(
+        "DEPRECATED: this script contains circular/non-causal diagnostics. "
+        "Run research/scripts/analyze_causal_policies.py instead."
+    )

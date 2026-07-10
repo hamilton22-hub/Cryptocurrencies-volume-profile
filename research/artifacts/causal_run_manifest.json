@@ -1,0 +1,33 @@
+{
+  "commands": [
+    "python3 research/scripts/analyze_causal_policies.py",
+    "python3 research/scripts/validate_causal_candidates.py"
+  ],
+  "versions": {
+    "python": "3.12.3",
+    "numpy": "2.4.4",
+    "pandas": "3.0.3",
+    "scikit_learn": "1.9.0"
+  },
+  "input_sha256": {
+    "trades": "67b10128009d386f7a0a0d54ed2662fb1e29500cec46c99da8a7d7cb82c433b9",
+    "klines": "208d4bdfb90c1bbff4286f054f4af5fd7021cc41985816ff9b1d019c1dbbf3e7",
+    "metrics": "5e739dd379513a133b5f213793760cf0300178a6cdf1a46044dcea2adb5a0bc8"
+  },
+  "script_sha256": {
+    "analyze_causal_policies.py": "cdeff0cd28ad1e781d3760e525971cd08fed78ba35a9578cfb5dde41e188ab27",
+    "validate_causal_candidates.py": "234827b64b97e29b7f0ba3bb77934edd9999b9edefbc359eaf9480701d1205bc",
+    "features.py": "50172e0afb106d1cb4814ed62f95ba69b32488f59d2b474740b2aa0231cf94bc",
+    "load_trades.py": "edfc15f0acbe2243c2fcece7ac66c8971c4400ba970a5bea0d124482eb33fc56"
+  },
+  "coverage": {
+    "klines_min": "2021-01-01 00:15:00+00:00",
+    "klines_max": "2026-06-30 23:45:00+00:00",
+    "kline_gaps_over_15m": 11,
+    "metrics_min": "2021-12-01 00:00:00+00:00",
+    "metrics_max": "2026-07-01 00:00:00+00:00",
+    "metric_gaps_over_5m": 1812
+  },
+  "random_seed": 42,
+  "r_reconciliation_tolerance": 0.1
+}
